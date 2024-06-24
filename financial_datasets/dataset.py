@@ -1,13 +1,14 @@
-from typing import List
+from typing import Optional
 
-from pydantic.main import BaseModel
+from pydantic import BaseModel
 
 
 class DatasetItem(BaseModel):
     question: str
     answer: str
     context: str
+    chunks: Optional[str] = None
 
 
 class Dataset(BaseModel):
-    items: List[DatasetItem]
+    items: list[DatasetItem]

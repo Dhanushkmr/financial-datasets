@@ -11,8 +11,7 @@ from tqdm import tqdm
 from financial_datasets.dataset import Dataset, DatasetItem
 from financial_datasets.llm.openai import chat_completion_request
 from financial_datasets.parser import FilingParser
-from financial_datasets.prompts import (default_prompt,
-                                        multi_chunk_based_qa_prompt)
+from financial_datasets.prompts import default_prompt, multi_chunk_based_qa_prompt
 from financial_datasets.tools import generate_dataset
 
 default_sec_identity = "gary gary@financialdatasets.org"
@@ -378,8 +377,10 @@ class DatasetGenerator:
                         continue
 
                     # Convert the dataset_items (list of dicts) to list of DatasetItem
-                    dataset_items = [DatasetItem(**item) for item in dataset_items]
-
+                    dataset_items = [
+                        DatasetItem(**item, chunks=combined_text)
+                        for item in dataset_items
+                    ]
                     # Add the generated items to our total list of questions
                     items.extend(dataset_items)
 
