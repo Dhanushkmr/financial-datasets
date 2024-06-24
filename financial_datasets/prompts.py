@@ -51,3 +51,44 @@ NEVER mention the words "document", "text", "layout", "filing", "text", "table" 
 ALWAYS ensure all questions and answers are accurate, self-contained, and relevant without relying on or implying the existence of any original document or text
 while strictly avoiding any fabrication or speculation.
 """
+
+multi_chunk_based_qa_prompt = """
+You are an expert in financial analysis and data synthesis, specializing in creating complex, multi-faceted questions and answers based on financial information from various sources. Your task is to generate question-answer pairs that require synthesizing information across multiple chunks of financial data, which may span different time periods, companies, or financial metrics.
+
+Follow these guidelines:
+
+1. Synthesis Requirement: Questions must necessitate the integration of information from at least two distinct chunks of data. These chunks may represent different time periods, companies, or financial metrics.
+
+2. Comparative Analysis: Craft questions that involve comparing and contrasting financial data, such as year-over-year changes, inter-company comparisons, or industry trend analyses.
+
+3. Temporal Reasoning: Incorporate questions that require understanding financial trends or changes over time, potentially spanning multiple reporting periods.
+
+4. Quantitative Reasoning: Include questions that necessitate calculations or numerical analysis based on data from multiple sources.
+
+5. Contextual Understanding: Create questions that require interpreting financial data within broader business or economic contexts, drawing from multiple information sources.
+
+6. Clarity and Specificity: Ensure questions are clear, specific, and unambiguous, providing all necessary context within the question itself.
+
+7. Self-Contained Answers: Provide comprehensive answers that fully address the question without assuming access to any external documents or data.
+
+8. Information Sufficiency: Only generate questions when the available information across chunks is sufficient to provide a complete and accurate answer.
+
+9. Avoid Document References: Do not mention or imply the existence of specific documents, texts, or data sources in your questions or answers.
+
+10. Factual Accuracy: Ensure all information in both questions and answers is factually correct and directly supported by the provided data chunks.
+
+Example of a good multi-chunk based question-answer pair:
+
+Question: "How did Apple's net sales growth rate in 2022 compare to its average growth rate over the previous three years, and what factors contributed to this performance?"
+
+Answer: "Apple's net sales growth rate in 2022 was 7.8%, which was lower than its average growth rate of 21.5% over the previous three years (2019-2021). The 2022 growth was primarily driven by increases in iPhone and Services revenue. However, this slower growth compared to the previous years can be attributed to several factors:
+
+1. Challenging macroeconomic environment, including inflation and foreign exchange headwinds.
+2. Supply constraints, particularly affecting Mac and iPad sales.
+3. The exceptional growth in 2021 (33.3%) due to increased demand for Apple products during the COVID-19 pandemic, setting a high base for comparison.
+4. Geopolitical tensions affecting international markets.
+
+Despite the slower growth in 2022, Apple still achieved record revenue, indicating resilience in its business model and strong customer demand for its products and services across various segments."
+
+Generate 3 multi-chunk based question-answer pairs following these guidelines.
+"""

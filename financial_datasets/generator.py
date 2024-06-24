@@ -1,17 +1,18 @@
 import json
+import random
 import time
 from io import BytesIO
-from typing import List
 
 import requests
-from PyPDF2 import PdfReader
 from langchain_text_splitters import TokenTextSplitter
+from PyPDF2 import PdfReader
 from tqdm import tqdm
 
-from financial_datasets.dataset import DatasetItem, Dataset
+from financial_datasets.dataset import Dataset, DatasetItem
 from financial_datasets.llm.openai import chat_completion_request
 from financial_datasets.parser import FilingParser
-from financial_datasets.prompts import default_prompt
+from financial_datasets.prompts import (default_prompt,
+                                        multi_chunk_based_qa_prompt)
 from financial_datasets.tools import generate_dataset
 
 default_sec_identity = "gary gary@financialdatasets.org"
@@ -20,8 +21,8 @@ default_sec_identity = "gary gary@financialdatasets.org"
 class DatasetGenerator:
     def __init__(self, model: str, api_key: str):
         # Ensure model begins with gpt-
-        if not model.startswith('gpt-'):
-            raise NotImplementedError(f'Model {model} is not supported yet.')
+        if not model.startswith("gpt-"):
+            raise NotImplementedError(f"Model {model} is not supported yet.")
 
         if not api_key:
             raise ValueError("API key is required.")
@@ -30,7 +31,7 @@ class DatasetGenerator:
 
     def generate_from_texts(
         self,
-        texts: List[str],
+        texts: list[str],
         max_questions=10,
         **kwargs,
     ) -> Dataset:
@@ -57,10 +58,12 @@ class DatasetGenerator:
         input_tokens = 0
         output_tokens = 0
 
-        progress_bar = tqdm(total=max_questions, desc="Generating questions", colour='green')
+        progress_bar = tqdm(
+            total=max_questions, desc="Generating questions", colour="green"
+        )
 
         # Generate dataset items
-        items: List[DatasetItem] = []
+        items: list[DatasetItem] = []
         for index, text in enumerate(texts):
             try:
                 # Determine the number of questions to generate for the current text
@@ -72,10 +75,16 @@ class DatasetGenerator:
                 response = chat_completion_request(
                     model=self._model,
                     tools=generate_dataset(),
-                    tool_choice={"type": "function", "function": {"name": "generate_dataset"}},
+                    tool_choice={
+                        "type": "function",
+                        "function": {"name": "generate_dataset"},
+                    },
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": f"Generate {current_max_questions} questions for the following block of text: {text}"}
+                        {
+                            "role": "user",
+                            "content": f"Generate {current_max_questions} questions for the following block of text: {text}",
+                        },
                     ],
                 )
 
@@ -161,7 +170,9 @@ class DatasetGenerator:
         # Chunk the text
         texts = token_splitter.split_text(text)
 
-        return self.generate_from_texts(texts=texts, max_questions=max_questions, kwargs=kwargs)
+        return self.generate_from_texts(
+            texts=texts, max_questions=max_questions, kwargs=kwargs
+        )
 
     def generate_from_10K(
         self,
@@ -192,14 +203,18 @@ class DatasetGenerator:
         # Chunk Items to prevent exceeding the context window of models at the question generation step.
         chunk_size = kwargs.get("chunk_size", 1024)
         chunk_overlap = kwargs.get("chunk_overlap", 100)
-        token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        token_splitter = TokenTextSplitter(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
         texts = []  # List to hold the chunked items
         for item in items:
             chunks = token_splitter.split_text(item)
             texts.extend(chunks)
 
         # Generate questions from the extracted text
-        return self.generate_from_texts(texts=texts, max_questions=max_questions, kwargs=kwargs)
+        return self.generate_from_texts(
+            texts=texts, max_questions=max_questions, kwargs=kwargs
+        )
 
     def generate_from_10Q(
         self,
@@ -227,16 +242,160 @@ class DatasetGenerator:
 
         # Get the items from the 10-Q
         filing_parser = FilingParser()
-        items = filing_parser.get_10Q_items(ticker, year, quarter, item_names, sec_identity)
+        items = filing_parser.get_10Q_items(
+            ticker, year, quarter, item_names, sec_identity
+        )
 
         # Chunk Items to prevent exceeding the context window of models at the question generation step.
         chunk_size = kwargs.get("chunk_size", 1024)
         chunk_overlap = kwargs.get("chunk_overlap", 100)
-        token_splitter = TokenTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        token_splitter = TokenTextSplitter(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
         texts = []  # List to hold the chunked items
         for item in items:
             chunks = token_splitter.split_text(item)
             texts.extend(chunks)
 
         # Generate questions from the extracted text
-        return self.generate_from_texts(texts=texts, max_questions=max_questions, kwargs=kwargs)
+        return self.generate_from_texts(
+            texts=texts, max_questions=max_questions, kwargs=kwargs
+        )
+
+    def generate_multi_chunk_questions(
+        self,
+        ticker: str,
+        year: int,
+        max_questions=10,
+        sec_identity=default_sec_identity,
+        num_chunks_per_question=3,
+        **kwargs,
+    ) -> Dataset:
+        """
+        Generate multi-chunk based questions from a specific SEC filing for a given ticker.
+
+        :param ticker: The stock ticker symbol.
+        :param year: The year of the filing.
+        :param max_questions: Maximum number of questions to generate.
+        :param sec_identity: The identity to use when making requests to the SEC API.
+        :param num_chunks_per_question: Number of chunks to combine for each question.
+
+        :return: Dataset containing the generated multi-chunk based questions.
+        """
+
+        # Get optional item names from kwargs
+        item_names = kwargs.get("item_names", [])
+
+        # Get the items from the 10-K
+        filing_parser = FilingParser()
+        items = filing_parser.get_10K_items(ticker, year, item_names, sec_identity)
+
+        # Chunk Items
+        chunk_size = kwargs.get("chunk_size", 1024)
+        chunk_overlap = kwargs.get("chunk_overlap", 100)
+        token_splitter = TokenTextSplitter(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        )
+        chunks = []  # List to hold all chunks
+        for item in items:
+            item_chunks = token_splitter.split_text(item)
+            chunks.extend(item_chunks)
+
+        # Generate multi-chunk based questions
+        return self.generate_multi_chunk_questions_from_chunks(
+            chunks=chunks,
+            max_questions=max_questions,
+            num_chunks_per_question=num_chunks_per_question,
+            **kwargs,
+        )
+
+    def generate_multi_chunk_questions_from_chunks(
+        self,
+        chunks: list[str],
+        max_questions=10,
+        num_chunks_per_question=3,
+        **kwargs,
+    ) -> Dataset:
+        """
+        Generate multi-chunk based questions from a list of chunks.
+
+        :param chunks: List of text chunks to generate questions from.
+        :param max_questions: Maximum number of questions to generate.
+        :param num_chunks_per_question: Number of chunks to combine for each question.
+
+        :return: Dataset containing the generated multi-chunk based questions.
+        """
+
+        # Get optional system prompt from kwargs
+        system_prompt = kwargs.get("system_prompt", multi_chunk_based_qa_prompt)
+
+        # Keep track of usage
+        input_tokens = 0
+        output_tokens = 0
+
+        progress_bar = tqdm(
+            total=max_questions, desc="Generating multi-chunk questions", colour="green"
+        )
+
+        # Generate dataset items
+        items: list[DatasetItem] = []
+        while len(items) < max_questions:
+            try:
+                # Randomly select chunks
+                selected_chunks = random.sample(chunks, num_chunks_per_question)
+                combined_text = "\n\n".join(selected_chunks)
+
+                # Generate questions
+                response = chat_completion_request(
+                    model=self._model,
+                    tools=generate_dataset(),
+                    tool_choice={
+                        "type": "function",
+                        "function": {"name": "generate_dataset"},
+                    },
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {
+                            "role": "user",
+                            "content": f"Generate a multi-chunk based question and answer pair based on the following combined information:\n\n{combined_text}",
+                        },
+                    ],
+                )
+
+                # Update usage
+                usage = response.usage
+                input_tokens += usage.prompt_tokens
+                output_tokens += usage.completion_tokens
+
+                # Parse tool call
+                tool_call = response.choices[0].message.tool_calls[0]
+                if tool_call:
+                    function_params = json.loads(tool_call.function.arguments)
+                    dataset_items = function_params.get("dataset_items")
+
+                    if not dataset_items:
+                        # Skip to the next iteration if no questions were generated
+                        continue
+
+                    # Convert the dataset_items (list of dicts) to list of DatasetItem
+                    dataset_items = [DatasetItem(**item) for item in dataset_items]
+
+                    # Add the generated items to our total list of questions
+                    items.extend(dataset_items)
+
+                    # Update the progress bar by the number of questions generated
+                    progress_bar.update(len(dataset_items))
+
+            except Exception as e:
+                print(f"Failed to generate multi-chunk question: {e}")
+                continue
+
+            # Sleep for 1 second to avoid overloading the LLM
+            time.sleep(1)
+
+        # Ensure the progress bar is closed
+        progress_bar.close()
+
+        return Dataset(
+            items=items[:max_questions],
+        )

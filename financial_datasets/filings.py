@@ -1,5 +1,4 @@
 from datetime import datetime
-
 from enum import Enum
 
 
@@ -27,7 +26,7 @@ class FilingItem(Enum):
     ITEM_16 = "Item 16"
 
 
-def filter_filings(filings, form: str, year: int):
+def filter_filings(filings: list, form: str, year: int):
     """
     Filter filings by form and year.
 
